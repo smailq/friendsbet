@@ -1,12 +1,12 @@
 <template>
   <div id="app" class="loggedin-page">
-    <div>
+    <div style="display: flex; justify-content: space-between;">
       <b>FriendsBet</b>
-      <p>
-        You are logged in as <b>{{ $root.$data.user.displayName }}</b> ({{ $root.$data.user.email }})<span
-          style="font-size:0.8em;" v-if="cardSummary"> with {{cardSummary}}</span>
-        <button style="margin-left:2em;" @click="logout">Logout</button>
-      </p>
+      <div style="text-align: center;">
+        {{ $root.$data.user.email }}
+        <span style="font-size:0.8em;" v-if="cardSummary"> with {{cardSummary}}</span>
+      </div>
+      <button style="margin-left:2em;" @click="logout">Logout</button>
     </div>
 
     <div class="creditcard-message" v-if="pendingCardAdd === false && hasCard === false">
@@ -17,22 +17,104 @@
       Your card is being processed and added. Please wait ...
     </div>
 
-    <div v-if="hasCard">
+    <div v-if="hasCard && betList.length < 1">
       <h3>Join bet</h3>
       <input v-model="joinBet" type="text">
       <button @click="join">join</button>
     </div>
 
-    <div>
-      <h3>
-        Ongoing Bets
-      </h3>
-      <ul v-if="betList.length > 0">
-        <li :key="bet.name" v-for="bet in betList">{{ bet.name }}</li>
-      </ul>
-      <p v-else>
-        no bets made
-      </p>
+    <div class="bet-list" v-if="betList.length > 0">
+      <div :key="bet.name" v-for="bet in betList">
+        <a @click="selectedBet = bet">{{ bet.name }}</a>
+      </div>
+    </div>
+    <p v-else>
+      no bets made
+    </p>
+
+    <div v-if="selectedBet.id">
+      <div class="heading">
+        <h1>{{ selectedBet.name }}</h1>
+        <a class="upload">Upload</a>
+      </div>
+      <a @click="showStats = !showStats">Toggle Stats</a>
+      <dl v-if="showStats">
+        <dt>End date</dt>
+        <dd>2020-05-01 (23 days left)</dd>
+        <dt>Participants</dt>
+        <dd style="display: flex;justify-content: space-between;">
+          <div>
+            <b>Kyu Lee</b>
+            <dl>
+              <dt>Missed</dt>
+              <dd>5 days (-$25)</dd>
+              <dt>Success</dt>
+              <dd>24</dd>
+              <dt>Longest Streak</dt>
+              <dd>12 days</dd>
+              <dt>Current winnings</dt>
+              <dd>$20</dd>
+            </dl>
+          </div>
+          <div>
+            <b>Kyu Lee</b>
+            <dl>
+              <dt>Missed</dt>
+              <dd>5 days (-$25)</dd>
+              <dt>Success</dt>
+              <dd>24</dd>
+              <dt>Longest Streak</dt>
+              <dd>12 days</dd>
+              <dt>Current winnings</dt>
+              <dd>$20</dd>
+            </dl>
+          </div>
+          <div>
+            <b>Kyu Lee</b>
+            <dl>
+              <dt>Missed</dt>
+              <dd>5 days (-$25)</dd>
+              <dt>Success</dt>
+              <dd>24</dd>
+              <dt>Longest Streak</dt>
+              <dd>12 days</dd>
+              <dt>Current winnings</dt>
+              <dd>$20</dd>
+            </dl>
+          </div>
+        </dd>
+      </dl>
+      <h3>2020-04-03 </h3>
+      <div class="daily-update">
+        <div>
+          <h4>Kyu Lee</h4>
+          image
+        </div>
+        <div>
+          <h4>Kyu Lee</h4>
+          image
+        </div>
+        <div>
+          <h4>Kyu Lee</h4>
+          image
+        </div>
+      </div>
+      <h3>2020-04-02</h3>
+      <div class="daily-update">
+        <div>
+          <h4>Kyu Lee</h4>
+          image
+        </div>
+        <div>
+          <h4>Kyu Lee</h4>
+          image
+        </div>
+        <div>
+          <h4>Kyu Lee</h4>
+          image
+        </div>
+      </div>
+      <h3>2020-04-01</h3>
     </div>
   </div>
 </template>
@@ -49,6 +131,8 @@
         cardSummary: undefined,
         joinBet: '',
         betList: [],
+        selectedBet: {},
+        showStats: false,
       };
     },
     beforeDestroy() {
@@ -68,8 +152,11 @@
           onSnapshot(snapshot => {
             const betlist = [];
             snapshot.forEach(result => {
-              betlist.push(result.data());
+              betlist.push({...result.data(), id: result.id});
             });
+            if (betlist.length > 0) {
+              this.selectedBet = betlist[0];
+            }
             this.betList = betlist;
           });
 
@@ -83,7 +170,7 @@
               this.hasCard = true;
 
               snapshot.forEach(qs => {
-                this.cardSummary = `${qs.get('funding')} ${qs.get('brand')} ending ${qs.get('last4')}`;
+                this.cardSummary = `${qs.get('brand')}(${qs.get('last4')})`;
               });
               if (this.stripeUnsubs) {
                 this.stripeUnsubs();
@@ -142,5 +229,46 @@
     padding: 1em;
     background-color: #E1F5FE;
     border-radius: 10px;
+  }
+
+  .bet-list {
+    margin-top: 1em;
+    display: flex;
+  }
+
+  h3 {
+    margin-bottom: 0;
+    background-color: #eee;
+    padding: .3em;
+  }
+
+  a {
+    color: blue;
+    text-decoration: underline;
+    cursor: pointer;
+  }
+
+  .daily-update {
+    display: flex;
+    justify-content: space-between;
+  }
+
+  .heading {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  a.upload {
+    font-size: 1.2em;
+    font-weight: bold;
+  }
+
+  dl {
+    margin-top: 0;
+  }
+
+  dt {
+    padding: .5em;
   }
 </style>
