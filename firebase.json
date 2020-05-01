@@ -17,6 +17,10 @@
     ],
     "rewrites": [
       {
+        "source": "/add-card",
+        "destination": "/add-card.html"
+      },
+      {
         "source": "**",
         "destination": "/index.html"
       }
