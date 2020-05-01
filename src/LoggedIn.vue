@@ -39,8 +39,12 @@
       </div>
       <a @click="showStats = !showStats">Toggle Stats</a>
       <dl v-if="showStats">
+        <dt>Current Leader</dt>
+        <dd>Kyu Lee</dd>
+        <dt>Start Date</dt>
+        <dd>2020-04-01 (12 days ago)</dd>
         <dt>End date</dt>
-        <dd>2020-05-01 (23 days left)</dd>
+        <dd>2020-05-01 (23 days to go)</dd>
         <dt>Participants</dt>
         <dd style="display: flex;justify-content: space-between;">
           <div>
