@@ -35,7 +35,7 @@
     <div v-if="selectedBet.id">
       <div class="heading">
         <h1>{{ selectedBet.name }}</h1>
-        <a class="upload">Upload</a>
+        <input type="file" name="fileToUpload" ref="file" @change="handleFileUpload($event.target.files)">
       </div>
       <a @click="showStats = !showStats">Toggle Stats</a>
       <dl v-if="showStats">
@@ -199,6 +199,11 @@
           });
 
     },
+    computed: {
+      uid() {
+        return this.$root.$data.user.uid;
+      }
+    },
     methods: {
       join() {
         // eslint-disable-next-line no-undef
@@ -218,6 +223,25 @@
           console.log(error);
         });
       },
+      handleFileUpload(files) {
+        if (!files || files.length < 1) {
+          return;
+        }
+        console.log(files);
+        // eslint-disable-next-line no-undef
+        let storageRef = firebase.app().storage().ref();
+        const fileRef = storageRef.child(`daily_updates/${this.uid}/${new Date().toISOString().substr(0, 10)}`);
+        fileRef.put(files[0]).then(snapshot => {
+          console.log('upload done');
+          console.log(fileRef.fullPath);
+          console.log(snapshot);
+          this.$refs.file.value = '';
+          alert('success');
+        }).catch(error => {
+          alert(error.message);
+        })
+
+      }
     },
   };
 </script>
@@ -274,5 +298,9 @@
 
   dt {
     padding: .5em;
+  }
+
+  dd {
+    margin-left: 1.5em;
   }
 </style>
