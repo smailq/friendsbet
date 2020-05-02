@@ -88,6 +88,13 @@
           </div>
         </dd>
       </dl>
+
+      <div v-for="update of updates" :key="update.id">
+        <img :src="update.url" style="width: 300px;">
+        {{ update.name }}
+        {{ update.timestamp }}
+      </div>
+
       <h3>2020-04-03 </h3>
       <div class="daily-update">
         <div>
@@ -137,6 +144,7 @@
         betList: [],
         selectedBet: {},
         showStats: false,
+        updates: [],
       };
     },
     beforeDestroy() {
@@ -147,7 +155,12 @@
         this.stripeUnsubs();
       }
     },
+    watch: {
+        'selectedBet': 'setupUpdates'
+    },
     mounted() {
+
+
 
       // eslint-disable-next-line no-undef
       firebase.firestore().
@@ -202,9 +215,30 @@
     computed: {
       uid() {
         return this.$root.$data.user.uid;
+      },
+      name() {
+        return this.$root.$data.user.displayName;
       }
     },
     methods: {
+      setupUpdates() {
+        if (!this.selectedBet.id) {
+          return;
+        }
+        // updates
+        // eslint-disable-next-line no-undef
+        firebase.firestore().collection(`bets/${this.selectedBet.id}/updates`).onSnapshot(qsnapshot => {
+          const updates = [];
+          qsnapshot.forEach(async snapshot => {
+
+            // eslint-disable-next-line no-undef
+            const imgRef = firebase.app().storage().ref().child(snapshot.get('imagePath'));
+            const url = await imgRef.getDownloadURL();
+            updates.push({...snapshot.data(), id: snapshot.id, url: url});
+          });
+          this.updates = updates;
+        });
+      },
       join() {
         // eslint-disable-next-line no-undef
         firebase.functions().httpsCallable('joinBet')({
@@ -230,13 +264,25 @@
         console.log(files);
         // eslint-disable-next-line no-undef
         let storageRef = firebase.app().storage().ref();
-        const fileRef = storageRef.child(`daily_updates/${this.uid}/${new Date().toISOString().substr(0, 10)}`);
+        const fileRef = storageRef.child(`updates/${this.uid}/${new Date().toISOString().substr(0, 10)}-${Math.random().toString(36).substring(7)}`);
         fileRef.put(files[0]).then(snapshot => {
           console.log('upload done');
           console.log(fileRef.fullPath);
           console.log(snapshot);
           this.$refs.file.value = '';
-          alert('success');
+
+          // eslint-disable-next-line no-undef
+          firebase.firestore().collection(`bets/${this.selectedBet.id}/updates`)
+          .add({
+            imagePath: fileRef.fullPath,
+            timestamp: new Date(),
+            uid: this.uid,
+            name: this.name,
+          }).then(() => {
+            alert('success');
+          }).catch(error => {
+            alert(error.message);
+          });
         }).catch(error => {
           alert(error.message);
         })
