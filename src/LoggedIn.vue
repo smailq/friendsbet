@@ -1,12 +1,14 @@
 <template>
   <div id="app" class="loggedin-page">
-    <div style="display: flex; justify-content: space-between;">
-      <b>FriendsBet</b>
-      <div style="text-align: center;">
-        {{ $root.$data.user.email }}
-        <span style="font-size:0.8em;" v-if="cardSummary"> with {{cardSummary}}</span>
+    <div class="top-menu">
+      <div>
+        <b>FriendsBet</b>
+        <div>
+          <small>{{ $root.$data.user.email }}</small>
+          <small v-if="cardSummary"> with {{cardSummary}}</small>
+        </div>
       </div>
-      <button style="margin-left:2em;" @click="logout">Logout</button>
+      <button @click="logout">Logout</button>
     </div>
 
     <div class="creditcard-message" v-if="pendingCardAdd === false && hasCard === false">
@@ -35,9 +37,14 @@
     <div v-if="selectedBet.id">
       <div class="heading">
         <h1>{{ selectedBet.name }}</h1>
-        <input type="file" name="fileToUpload" ref="file" @change="handleFileUpload($event.target.files)">
+        <p>
+          <label>Upload update: </label>
+          <input type="file" name="fileToUpload" ref="file" @change="handleFileUpload($event.target.files)">
+        </p>
       </div>
-      <a @click="showStats = !showStats">Toggle Stats</a>
+      <div class="stats">
+        <a @click="showStats = !showStats">Toggle Stats</a>
+      </div>
       <dl v-if="showStats">
         <dt>Current Leader</dt>
         <dd>Kyu Lee</dd>
@@ -89,43 +96,15 @@
         </dd>
       </dl>
 
-      <div v-for="update of updates" :key="update.id">
-        <img :src="update.url" style="width: 300px;">
-        {{ update.name }}
-        {{ update.timestamp }}
-      </div>
-
-      <h3>2020-04-03 </h3>
-      <div class="daily-update">
-        <div>
-          <h4>Kyu Lee</h4>
-          image
-        </div>
-        <div>
-          <h4>Kyu Lee</h4>
-          image
-        </div>
-        <div>
-          <h4>Kyu Lee</h4>
-          image
+      <div v-for="oneday of groupedUpdates" :key="oneday[0]['timestamp'].toDate().toISOString()">
+        <h3>{{ oneday[0]['timestamp'].toDate().toISOString().slice(0,10) }}</h3>
+        <div class="daily-update">
+          <div v-for="update of oneday" :key="update.id">
+            <h4>{{ update.name }}</h4>
+            <img :src="update.url" style="width: 300px;">
+          </div>
         </div>
       </div>
-      <h3>2020-04-02</h3>
-      <div class="daily-update">
-        <div>
-          <h4>Kyu Lee</h4>
-          image
-        </div>
-        <div>
-          <h4>Kyu Lee</h4>
-          image
-        </div>
-        <div>
-          <h4>Kyu Lee</h4>
-          image
-        </div>
-      </div>
-      <h3>2020-04-01</h3>
     </div>
   </div>
 </template>
@@ -145,6 +124,7 @@
         selectedBet: {},
         showStats: false,
         updates: [],
+        dates: [],
       };
     },
     beforeDestroy() {
@@ -156,11 +136,9 @@
       }
     },
     watch: {
-        'selectedBet': 'setupUpdates'
+      'selectedBet': 'setupUpdates',
     },
     mounted() {
-
-
 
       // eslint-disable-next-line no-undef
       firebase.firestore().
@@ -218,7 +196,40 @@
       },
       name() {
         return this.$root.$data.user.displayName;
-      }
+      },
+      sortedUpdates() {
+        const sorted = [...this.updates];
+        return sorted.sort((b, a) => {
+          if (a.timestamp < b.timestamp) {
+            return -1;
+          } else if (a.timestamp.a > b.timestamp) {
+            return 1;
+          } else {
+            return 0;
+          }
+        });
+      },
+      groupedUpdates() {
+
+        return this.sortedUpdates.reduce((acc, val) => {
+          const lastVal = acc.slice(-1)[0];
+          console.log('lastval: ', lastVal);
+          if (lastVal) {
+            // console.log('last val time: ', lastVal[0]['timestamp'].toDate())
+            if (lastVal[0]['timestamp'].toDate().toISOString().slice(0, 10) !==
+                val['timestamp'].toDate().toISOString().slice(0, 10)) {
+              acc.push([val]);
+            } else {
+              acc.slice(-1)[0].push(val);
+            }
+          } else {
+            acc.push([val]);
+          }
+
+          console.log(acc);
+          return acc;
+        }, []);
+      },
     },
     methods: {
       setupUpdates() {
@@ -227,17 +238,21 @@
         }
         // updates
         // eslint-disable-next-line no-undef
-        firebase.firestore().collection(`bets/${this.selectedBet.id}/updates`).onSnapshot(qsnapshot => {
-          const updates = [];
-          qsnapshot.forEach(async snapshot => {
+        firebase.firestore().
+            collection(`bets/${this.selectedBet.id}/updates`).
+            orderBy('timestamp', 'desc').
+            onSnapshot(qsnapshot => {
+              const updates = [];
+              qsnapshot.forEach(async snapshot => {
 
-            // eslint-disable-next-line no-undef
-            const imgRef = firebase.app().storage().ref().child(snapshot.get('imagePath'));
-            const url = await imgRef.getDownloadURL();
-            updates.push({...snapshot.data(), id: snapshot.id, url: url});
-          });
-          this.updates = updates;
-        });
+                // eslint-disable-next-line no-undef
+                const imgRef = firebase.app().storage().ref().child(snapshot.get('imagePath'));
+                const url = await imgRef.getDownloadURL();
+                updates.push({...snapshot.data(), id: snapshot.id, url: url});
+                // console.log(snapshot.get('timestamp').toDate().toISOString().slice(0,10));
+              });
+              this.updates = updates;
+            });
       },
       join() {
         // eslint-disable-next-line no-undef
@@ -264,7 +279,8 @@
         console.log(files);
         // eslint-disable-next-line no-undef
         let storageRef = firebase.app().storage().ref();
-        const fileRef = storageRef.child(`updates/${this.uid}/${new Date().toISOString().substr(0, 10)}-${Math.random().toString(36).substring(7)}`);
+        const fileRef = storageRef.child(
+            `updates/${this.uid}/${new Date().toISOString().substr(0, 10)}-${Math.random().toString(36).substring(7)}`);
         fileRef.put(files[0]).then(snapshot => {
           console.log('upload done');
           console.log(fileRef.fullPath);
@@ -272,8 +288,7 @@
           this.$refs.file.value = '';
 
           // eslint-disable-next-line no-undef
-          firebase.firestore().collection(`bets/${this.selectedBet.id}/updates`)
-          .add({
+          firebase.firestore().collection(`bets/${this.selectedBet.id}/updates`).add({
             imagePath: fileRef.fullPath,
             timestamp: new Date(),
             uid: this.uid,
@@ -285,17 +300,34 @@
           });
         }).catch(error => {
           alert(error.message);
-        })
+        });
 
-      }
+      },
     },
   };
 </script>
 
 <style scoped>
+  button {
+    padding: .3em 1em;
+    border: none;
+    background: #607D8B;
+    color: white;
+    line-height: 1.5em;
+    height: fit-content;
+    border-radius: 5px;
+  }
+  .top-menu {
+    display: flex;
+    justify-content: space-between;
+    padding: 10px;
+    background-color: #2196F3;
+    color: white;
+  }
+
   .loggedin-page {
-    max-width: 600px;
-    margin: 0 auto;
+    /*max-width: 100%;*/
+    /*margin: 0 auto;*/
   }
 
   .creditcard-message {
@@ -325,12 +357,22 @@
   .daily-update {
     display: flex;
     justify-content: space-between;
+    overflow-x: auto;
   }
 
-  .heading {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
+  .heading > h1 {
+    margin-bottom: 0;
+    /*display: flex;*/
+    /*justify-content: space-between;*/
+    /*align-items: center;*/
+  }
+
+  .heading > input {
+    margin-top: .5em;
+  }
+
+  div.stats {
+    margin-top: 1em;
   }
 
   a.upload {
