@@ -25,33 +25,30 @@
       <button @click="join">join</button>
     </div>
 
-    <div class="bet-list" v-if="betList.length > 0">
-      <div :key="bet.name" v-for="bet in betList">
-        <a @click="selectedBet = bet">{{ bet.name }}</a>
+    <div class="bet-menu">
+      <div class="bet-list" v-if="betList.length > 0">
+        <div :key="bet.name" v-for="bet in betList" style="background-color: #3F51B5;padding: .3em .8em;">
+          <a @click="selectedBet = bet">{{ bet.name }}</a>
+        </div>
+      </div>
+      <div>
+        <button style="margin-right: 1em;">New</button>
+        <button style="margin-right: 1em;">Join</button>
       </div>
     </div>
-    <p v-else>
-      no bets made
-    </p>
 
     <div v-if="selectedBet.id">
       <div class="heading">
         <h1>{{ selectedBet.name }}</h1>
-        <p>
-          <label>Upload update: </label>
-          <input type="file" name="fileToUpload" ref="file" @change="handleFileUpload($event.target.files)">
-        </p>
+        <small>From {{localDate(selectedBet.startDate.toDate())}} to {{localDate(selectedBet.endDate.toDate())}}</small>
       </div>
-      <div class="stats">
-        <a @click="showStats = !showStats">Toggle Stats</a>
+      <div class="toolbar">
+          <input type="file" name="fileToUpload" ref="file" @change="handleFileUpload($event.target.files)">
+          <a @click="showStats = !showStats">Toggle Stats</a>
       </div>
       <dl v-if="showStats">
         <dt>Current Leader</dt>
         <dd>Kyu Lee</dd>
-        <dt>Start Date</dt>
-        <dd>2020-04-01 (12 days ago)</dd>
-        <dt>End date</dt>
-        <dd>2020-05-01 (23 days to go)</dd>
         <dt>Participants</dt>
         <dd style="display: flex;justify-content: space-between;">
           <div>
@@ -97,7 +94,7 @@
       </dl>
 
       <div v-for="oneday of groupedUpdates" :key="oneday[0]['timestamp'].toDate().toISOString()">
-        <h3>{{ oneday[0]['timestamp'].toDate().toISOString().slice(0,10) }}</h3>
+        <h3>{{ localDate(oneday[0]['timestamp'].toDate()) }}</h3>
         <div class="daily-update">
           <div v-for="update of oneday" :key="update.id">
             <h4>{{ update.name }}</h4>
@@ -105,11 +102,19 @@
           </div>
         </div>
       </div>
+
+      <div class="loading" v-if="uploading">
+        <p>
+          Uploading ...
+        </p>
+      </div>
     </div>
   </div>
 </template>
 
 <script>
+
+
   export default {
     name: 'LoggedIn',
     data() {
@@ -125,6 +130,7 @@
         showStats: false,
         updates: [],
         dates: [],
+        uploading: false,
       };
     },
     beforeDestroy() {
@@ -213,11 +219,12 @@
 
         return this.sortedUpdates.reduce((acc, val) => {
           const lastVal = acc.slice(-1)[0];
-          console.log('lastval: ', lastVal);
+          // console.log('lastval: ', lastVal);
           if (lastVal) {
             // console.log('last val time: ', lastVal[0]['timestamp'].toDate())
-            if (lastVal[0]['timestamp'].toDate().toISOString().slice(0, 10) !==
-                val['timestamp'].toDate().toISOString().slice(0, 10)) {
+            // Use user's local time
+            if (this.localDate(lastVal[0]['timestamp'].toDate()) !==
+                this.localDate(val['timestamp'].toDate())) {
               acc.push([val]);
             } else {
               acc.slice(-1)[0].push(val);
@@ -226,12 +233,15 @@
             acc.push([val]);
           }
 
-          console.log(acc);
+          // console.log(acc);
           return acc;
         }, []);
       },
     },
     methods: {
+      localDate(date) {
+        return `${date.getFullYear()}.${date.getMonth() + 1}.${date.getDate()}`;
+      },
       setupUpdates() {
         if (!this.selectedBet.id) {
           return;
@@ -272,35 +282,38 @@
           console.log(error);
         });
       },
-      handleFileUpload(files) {
+      randString() {
+        return Math.random().toString(36).substring(2);
+      },
+      async handleFileUpload(files) {
         if (!files || files.length < 1) {
           return;
         }
-        console.log(files);
+        const file = files[0];
         // eslint-disable-next-line no-undef
-        let storageRef = firebase.app().storage().ref();
+        const storageRef = firebase.app().storage().ref();
+        const uploadTime = new Date();
         const fileRef = storageRef.child(
-            `updates/${this.uid}/${new Date().toISOString().substr(0, 10)}-${Math.random().toString(36).substring(7)}`);
-        fileRef.put(files[0]).then(snapshot => {
-          console.log('upload done');
-          console.log(fileRef.fullPath);
-          console.log(snapshot);
-          this.$refs.file.value = '';
+            `updates/${this.uid}/${this.localDate(uploadTime)}/${this.randString()}`);
 
-          // eslint-disable-next-line no-undef
-          firebase.firestore().collection(`bets/${this.selectedBet.id}/updates`).add({
-            imagePath: fileRef.fullPath,
-            timestamp: new Date(),
-            uid: this.uid,
-            name: this.name,
-          }).then(() => {
-            alert('success');
-          }).catch(error => {
-            alert(error.message);
-          });
-        }).catch(error => {
-          alert(error.message);
+        this.uploading = true;
+
+        await fileRef.put(file).catch(e => {
+          alert(e.message);
+          this.uploading = false;
         });
+
+        this.$refs.file.value = '';
+
+        // eslint-disable-next-line no-undef
+        await firebase.firestore().collection(`bets/${this.selectedBet.id}/updates`).add({
+          imagePath: fileRef.fullPath,
+          originalName: file.name,
+          type: file.type,
+          timestamp: new Date(),
+          uid: this.uid,
+          name: this.name,
+        }).catch(e => alert(e.message)).finally(() => this.uploading = false);
 
       },
     },
@@ -317,6 +330,25 @@
     height: fit-content;
     border-radius: 5px;
   }
+
+  .loading > p {
+    font-size: 2em;
+    font-weight: bold;
+    font-family: monospace;
+  }
+
+  .loading {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background-color: #808080d6;
+  }
+
   .top-menu {
     display: flex;
     justify-content: space-between;
@@ -337,13 +369,24 @@
     border-radius: 10px;
   }
 
-  .bet-list {
-    margin-top: 1em;
+  .bet-menu {
     display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .bet-list {
+    display: flex;
+  }
+
+  .bet-list > div > a {
+    color: white;
+    text-decoration: none;
+    font-size: .8em;
   }
 
   h3 {
     margin-bottom: 0;
+    margin-top: 2em;
     background-color: #eee;
     padding: .3em;
   }
@@ -356,8 +399,18 @@
 
   .daily-update {
     display: flex;
-    justify-content: space-between;
     overflow-x: auto;
+    margin: 0 1em;
+  }
+
+  .heading {
+    margin: 0 .5em;
+  }
+
+  .toolbar {
+    margin: .5em;
+    display: flex;
+    justify-content: space-between;
   }
 
   .heading > h1 {
@@ -367,8 +420,9 @@
     /*align-items: center;*/
   }
 
-  .heading > input {
-    margin-top: .5em;
+  .heading > small {
+    color: grey;
+    padding-left: .25em;
   }
 
   div.stats {
